@@ -2,18 +2,21 @@
 """
 Finds the git commit hash of branches that don't yet have a pylint status and:
     - sends a repo status of 'pending' with context 'pylint'
+    - checks out that revision
     - runs pylint
     - send a repo status of 'success' or 'failure'
 """
 
-import logging as logger
+import logging
 import json
 import requests
 import os
-from subprocess import check_output
+from subprocess import check_output, check_call
 from time import sleep
+from pylint import epylint as lint  # we like version 1.1.0
 
-logger.basicConfig(level=logger.DEBUG)
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger('pylint_repo_status')
 
 OWNER = "DramaFever"
 REPO = "hacks" # FIXME "www"
@@ -68,17 +71,23 @@ def try_claim_commit(sha):
     cur_status = get_most_recent_status_for(sha)
     return my_id == cur_status['id']  # did my claim stick?
 
+def checkout(sha):
+    """check out specified sha"""
+    check_call(['git', 'checkout', sha])
+
 def pylint_check(sha):
     """checks out and runs pylint on the given sha, returning True if good"""
+    # lint.py_run(...)
     return 1 / 0
 
 def pylint_branches():
     # FIXME git_fetch()
     for sha in unmerged_branch_heads():
         if not try_claim_commit(sha):
-            continue
+            continue  # already done on in progress
         logger.debug("claimed {}".format(sha))
         try:
+            checkout(sha)
             create_status_for(sha, 'success' if pylint_check(sha) else 'error')
         except:
             logger.exception("Problem pylinting {}".format(sha))
