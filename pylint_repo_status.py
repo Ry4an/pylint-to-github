@@ -98,10 +98,10 @@ def pylint_check(sha):
     if output:
         logger.info("PYLINT OUTPUT='{}'".format(output))
         return False
-    return 1/0 # True
+    return True
 
 def pylint_branches():
-    # FIXME git_fetch()
+    git_fetch()
     for sha in only_recent(unmerged_branch_heads()):
         if not try_claim_commit(sha):
             continue  # already done on in progress
@@ -112,7 +112,6 @@ def pylint_branches():
         except:
             logger.exception("Problem pylinting {}".format(sha))
             create_status_for(sha, 'failure')
-        break  # FIXME remove
 
 if __name__ == "__main__":
     pylint_branches()
