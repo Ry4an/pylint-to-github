@@ -10,20 +10,21 @@ Finds the git commit hash of branches that don't yet have a pylint status and:
 import logging
 import json
 import requests
+import datetime
 import os
-from subprocess import check_output, check_call
+from subprocess import check_output, check_call, CalledProcessError
 from time import sleep
-from pylint import epylint as lint  # we like version 1.1.0
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger('pylint_repo_status')
 
 OWNER = "DramaFever"
-REPO = "hacks" # FIXME "www"
+REPO = "www"
 TOKEN = os.environ['GITHUB_TOKEN']
 GITHUB_BASE = "https://api.github.com/repos/{owner}/{repo}".format(owner=OWNER, repo=REPO)
 STATUSES_FOR_REF = GITHUB_BASE + "/commits/{ref}/statuses?access_token={token}"
 CREATE_STATUS_FOR_REF = GITHUB_BASE + "/statuses/{ref}?access_token={token}"
+PYLINT_RC = "./pylint.rc"
 
 def git_fetch():
     """Make sure our local has good remote understanding"""
@@ -39,7 +40,16 @@ def unmerged_branch_heads():
         '--list',
         '--no-abbrev'
         ])
-    return [line.split()[1] for line in output.rstrip().split("\n")]
+    return [line.split()[1] for line in output.rstrip().split("\n") if not '->' in line]
+
+def only_recent(iterator, delta=datetime.timedelta(days=1)):
+    """filter that passes only commits newer than timedelta, default 1 week"""
+    for sha in iterator:
+        logger.debug("date checking '{}'".format(sha))
+        datetime_str = check_output(['git', 'show', '-s', '--format=%ct', sha])
+        commit_time = datetime.datetime.utcfromtimestamp(int(datetime_str))
+        if datetime.datetime.utcnow() - commit_time < delta:
+            yield sha
 
 def get_most_recent_status_for(sha):
     """get current pylint status for given sha, or None if no statuses found"""
@@ -49,6 +59,7 @@ def get_most_recent_status_for(sha):
 
 def create_status_for(sha, state, description=None, context="pylint", target_url=None):
     """create a new status for the given sha w/ specified parameters, returns id"""
+    logger.debug("creating status for sha='{}'".format(sha))
     post = {'state': state, 'context': context}
     if target_url:
         post['target_url'] = target_url
@@ -77,12 +88,21 @@ def checkout(sha):
 
 def pylint_check(sha):
     """checks out and runs pylint on the given sha, returning True if good"""
-    # lint.py_run(...)
-    return 1 / 0
+    args = ['pylint', '--rcfile', PYLINT_RC, 'dramafever']
+    logger.debug("args={}".format(args))
+    try:
+        output = check_output(args)
+    except CalledProcessError as ex:
+        logger.info("PYLINT EXIT={} OUTPUT='{}'".format(ex.returncode, ex.output))
+        return False
+    if output:
+        logger.info("PYLINT OUTPUT='{}'".format(output))
+        return False
+    return 1/0 # True
 
 def pylint_branches():
     # FIXME git_fetch()
-    for sha in unmerged_branch_heads():
+    for sha in only_recent(unmerged_branch_heads()):
         if not try_claim_commit(sha):
             continue  # already done on in progress
         logger.debug("claimed {}".format(sha))
