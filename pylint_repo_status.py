@@ -43,7 +43,7 @@ def unmerged_branch_heads():
     return [line.split()[1] for line in output.rstrip().split("\n") if not '->' in line]
 
 def only_recent(iterator, delta=datetime.timedelta(days=1)):
-    """filter that passes only commits newer than timedelta, default 1 week"""
+    """filter that passes only commits newer than timedelta, default 1 day"""
     for sha in iterator:
         logger.debug("date checking '{}'".format(sha))
         datetime_str = check_output(['git', 'show', '-s', '--format=%ct', sha])
@@ -75,8 +75,8 @@ def try_claim_commit(sha):
     """returns True if we should act on this sha, and False if already done"""
     # fake double-check has a non-fatal race condition, but better than nothing
     last_status = get_most_recent_status_for(sha)
-    if last_status and last_status == 'pending': # last_status['state'] != 'error':
-        return False
+    if last_status and # last_status['state'] != 'error':
+        return False  # already done or in progress
     my_id = create_status_for(sha, 'pending', 'running pylint')
     sleep(1)
     cur_status = get_most_recent_status_for(sha)
