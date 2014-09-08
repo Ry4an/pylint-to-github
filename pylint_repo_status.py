@@ -28,8 +28,7 @@ PYLINT_RC = "./pylint.rc"
 
 def git_fetch():
     """Make sure our local has good remote understanding"""
-    output = check_output(['git', 'fetch'])
-
+    check_call(['git', 'fetch'])
 
 def unmerged_branch_heads():
     """Get just the githash of the the unmerged branch heads -- sadly alphabetized"""
@@ -75,7 +74,7 @@ def try_claim_commit(sha):
     """returns True if we should act on this sha, and False if already done"""
     # fake double-check has a non-fatal race condition, but better than nothing
     last_status = get_most_recent_status_for(sha)
-    if last_status and # last_status['state'] != 'error':
+    if last_status and last_status['state'] != 'error':
         return False  # already done or in progress
     my_id = create_status_for(sha, 'pending', 'running pylint')
     sleep(1)
@@ -88,6 +87,7 @@ def checkout(sha):
 
 def pylint_check(sha):
     """checks out and runs pylint on the given sha, returning True if good"""
+    checkout(sha)
     args = ['pylint', '--rcfile', PYLINT_RC, 'dramafever']
     logger.debug("args={}".format(args))
     try:
@@ -101,13 +101,13 @@ def pylint_check(sha):
     return True
 
 def pylint_branches():
+    """run pylint across all new enough branches and report back status"""
     git_fetch()
     for sha in only_recent(unmerged_branch_heads()):
         if not try_claim_commit(sha):
             continue  # already done on in progress
         logger.debug("claimed {}".format(sha))
         try:
-            checkout(sha)
             if pylint_check(sha):
                 create_status_for(sha, 'success', 'pylint passed')
             else :
