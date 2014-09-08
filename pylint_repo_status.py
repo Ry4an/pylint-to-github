@@ -75,9 +75,9 @@ def try_claim_commit(sha):
     """returns True if we should act on this sha, and False if already done"""
     # fake double-check has a non-fatal race condition, but better than nothing
     last_status = get_most_recent_status_for(sha)
-    if last_status and last_status['state'] != 'failure':
+    if last_status and last_status == 'pending': # last_status['state'] != 'error':
         return False
-    my_id = create_status_for(sha, 'pending')
+    my_id = create_status_for(sha, 'pending', 'running pylint')
     sleep(1)
     cur_status = get_most_recent_status_for(sha)
     return my_id == cur_status['id']  # did my claim stick?
@@ -108,10 +108,13 @@ def pylint_branches():
         logger.debug("claimed {}".format(sha))
         try:
             checkout(sha)
-            create_status_for(sha, 'success' if pylint_check(sha) else 'error')
+            if pylint_check(sha):
+                create_status_for(sha, 'success', 'pylint passed')
+            else :
+                create_status_for(sha, 'failure', 'pylint failed')
         except:
             logger.exception("Problem pylinting {}".format(sha))
-            create_status_for(sha, 'failure')
+            create_status_for(sha, 'error', 'exception during pylint')
 
 if __name__ == "__main__":
     pylint_branches()
